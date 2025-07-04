@@ -4,8 +4,8 @@
 
 mkdir -p packages/crsqlite-wasm/dist
 cd deps/emsdk
-./emsdk install 3.1.45
-./emsdk activate 3.1.45
+./emsdk install 3.1.47
+./emsdk activate 3.1.47
 source ./emsdk_env.sh
 cd ../wa-sqlite
 make

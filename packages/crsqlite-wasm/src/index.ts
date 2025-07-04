@@ -63,9 +63,8 @@ export default async function initWasm(
     },
   });
   const sqlite3 = SQLite.Factory(wasmModule);
-  sqlite3.vfs_register(
-    new IDBBatchAtomicVFS("idb-batch-atomic", { durability: "relaxed" })
-  );
+  const vfs = await IDBBatchAtomicVFS.create("idb-batch-atomic", wasmModule);
+  sqlite3.vfs_register(vfs, true);
 
   api = new SQLite3(sqlite3);
   return api;

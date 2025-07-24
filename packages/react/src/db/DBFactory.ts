@@ -19,7 +19,7 @@ function init(wasmUri?: string) {
     return initPromise;
   }
 
-  initPromise = initWasm(wasmUri ? () => wasmUri : undefined);
+  initPromise = initWasm({ locateWasm: wasmUri ? () => wasmUri : undefined });
   return initPromise;
 }
 

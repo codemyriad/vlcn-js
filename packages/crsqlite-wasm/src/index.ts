@@ -12,17 +12,19 @@ type SQLiteAPI = ReturnType<typeof SQLite.Factory>;
 export class SQLite3 {
   constructor(private base: SQLiteAPI) {}
 
-  open(filename?: string, mode: string = "c") {
+  open(filename: string = ":memory:", mode: string = "c", vfs_name?: string) {
     return serialize(
       null,
       undefined,
       () => {
         return this.base.open_v2(
-          filename || ":memory:",
+          filename,
           SQLite.SQLITE_OPEN_CREATE |
             SQLite.SQLITE_OPEN_READWRITE |
             SQLite.SQLITE_OPEN_URI,
-          filename != null ? "idb-batch-atomic" : undefined
+          // My understanding is that filename = ":memory:" case doesn't care about the vfs_name, whereas not specifying
+          // the vfs_name will use the default vfs (which is the desired VFS if set up using 'iniwWasm')
+          vfs_name
         );
       },
       topLevelMutex
@@ -47,9 +49,15 @@ export class SQLite3 {
   }
 }
 
-export default async function initWasm(
-  locateWasm?: (file: string) => string
-): Promise<SQLite3> {
+export type InitWasmOptions = {
+  locateWasm?: (file: string) => string;
+  vfsFactory?: (module: SQLiteAPI) => Promise<SQLiteVFS>;
+};
+
+export default async function initWasm({
+  locateWasm,
+  vfsFactory = (module) => IDBBatchAtomicVFS.create("idb-batch-atomic", module),
+}: InitWasmOptions): Promise<SQLite3> {
   if (api != null) {
     return api;
   }
@@ -63,7 +71,7 @@ export default async function initWasm(
     },
   });
   const sqlite3 = SQLite.Factory(wasmModule);
-  const vfs = await IDBBatchAtomicVFS.create("idb-batch-atomic", wasmModule);
+  const vfs = await vfsFactory(wasmModule);
   sqlite3.vfs_register(vfs, true);
 
   api = new SQLite3(sqlite3);

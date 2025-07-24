@@ -1,5 +1,8 @@
 import { DB } from "@vlcn.io/ws-client";
-import initWasm, { DB as WasmDB } from "@vlcn.io/crsqlite-wasm";
+import initWasm, {
+  DB as WasmDB,
+  type InitWasmOptions,
+} from "@vlcn.io/crsqlite-wasm";
 import { Change } from "@vlcn.io/ws-common";
 import { StmtAsync, firstPick } from "@vlcn.io/xplat-api";
 import tblrx from "@vlcn.io/rx-tbl";
@@ -137,11 +140,12 @@ class WrappedDB implements DB {
  * @param dbname
  * @returns
  */
-export function createDbProvider(
-  wasmUri?: string
-): (dbname: string) => PromiseLike<DB> {
+export function createDbProvider({
+  locateWasm,
+  vfsFactory,
+}: InitWasmOptions): (dbname: string) => PromiseLike<DB> {
   return async (dbname: string): Promise<DB> => {
-    const sqlite = await initWasm(wasmUri ? () => wasmUri : undefined);
+    const sqlite = await initWasm({ locateWasm, vfsFactory });
     const db = await sqlite.open(dbname);
 
     const [pullChangesetStmt, applyChangesetStmt, updatePeerTrackerStmt] =

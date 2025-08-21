@@ -3,6 +3,7 @@ node-deps = ./packages/crsqlite-wasm/node_modules
 wasm-file = ./packages/crsqlite-wasm/dist/crsqlite.wasm
 tsbuildinfo = ./tsbuild-all/tsconfig.tsbuildinfo
 typed-sql-pkg = ./deps/typed-sql/packages/type-gen/pkg/package.json
+sqlite-src-tarball = ${SQLITE_SRC_TARBALL}
 
 .EXPORT_ALL_VARIABLES:
 	CRSQLITE_NOPREBUILD = 1
@@ -18,7 +19,13 @@ $(typed-sql-pkg):
 $(node-deps): $(git-deps) $(typed-sql-pkg)
 	pnpm install
 
-$(wasm-file): $(git-deps)
+# NOTE: sqlite tarball, both the path (SQLITE_SRC_TARBALL) and the actual tarball
+# should be provided outside this process
+# NOTE: there are currently no checks checking that the
+# env variable (SQLITE_SRC_TARBALL) is set.
+$(wasm-file): $(git-deps) $(sqlite-src-tarball)
+	mkdir -p deps/wa-sqlite/deps/tar
+	cp $(sqlite-src-tarball) deps/wa-sqlite/deps/tar
 	./build-wasm.sh
 
 $(tsbuildinfo): $(node-deps) $(wasm-file) FORCE

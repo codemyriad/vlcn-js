@@ -140,12 +140,11 @@ class WrappedDB implements DB {
  * @param dbname
  * @returns
  */
-export function createDbProvider({
-  locateWasm,
-  vfsFactory,
-}: InitWasmOptions): (dbname: string) => PromiseLike<DB> {
+export function createDbProvider(
+  opts: InitWasmOptions
+): (dbname: string) => PromiseLike<DB> {
   return async (dbname: string): Promise<DB> => {
-    const sqlite = await initWasm({ locateWasm, vfsFactory });
+    const sqlite = await initWasm(opts);
     const db = await sqlite.open(dbname);
 
     const [pullChangesetStmt, applyChangesetStmt, updatePeerTrackerStmt] =

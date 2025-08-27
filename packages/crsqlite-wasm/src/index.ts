@@ -50,11 +50,13 @@ export class SQLite3 {
 }
 
 export type InitWasmOptions = {
+  APIFactory?: (moduleArg?: Record<string, any>) => Promise<SQLiteAPI>;
   locateWasm?: (file: string) => string;
   vfsFactory?: (module: SQLiteAPI) => Promise<SQLiteVFS>;
 };
 
 export default async function initWasm({
+  APIFactory = SQLiteAsyncESMFactory,
   locateWasm,
   vfsFactory = (module) => IDBBatchAtomicVFS.create("idb-batch-atomic", module),
 }: InitWasmOptions): Promise<SQLite3> {
@@ -62,7 +64,7 @@ export default async function initWasm({
     return api;
   }
 
-  const wasmModule = await SQLiteAsyncESMFactory({
+  const wasmModule = await APIFactory({
     locateFile(file: string) {
       if (locateWasm) {
         return locateWasm(file);

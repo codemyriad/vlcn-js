@@ -1,4 +1,4 @@
-import initWasm from "@vlcn.io/crsqlite-wasm";
+import initWasm, { WasmInitializer } from "@vlcn.io/crsqlite-wasm";
 import { DBAsync, StmtAsync } from "@vlcn.io/xplat-api";
 import { TXAsync } from "@vlcn.io/xplat-api";
 import { DBID } from "@vlcn.io/xplat-api";
@@ -100,8 +100,12 @@ export class DB {
   }
 }
 
-export default async function getDB(wasmUri: string | undefined, dbid: DBID) {
-  const sqlite = await initWasm(wasmUri ? () => wasmUri : undefined);
+export default async function getDB(
+  wasmUri: string | undefined,
+  dbid: DBID,
+  initializer: WasmInitializer = initWasm
+) {
+  const sqlite = await initializer(wasmUri ? () => wasmUri : undefined);
   const db = await sqlite.open(dbid);
 
   const [pullChangesetStmt, applyChangesetStmt, updatePeerTrackerStmt] =

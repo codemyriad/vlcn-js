@@ -12,17 +12,19 @@ type SQLiteAPI = ReturnType<typeof SQLite.Factory>;
 export class SQLite3 {
   constructor(private base: SQLiteAPI) {}
 
-  open(filename?: string, mode: string = "c") {
+  open(filename: string = ":memory:", mode: string = "c", vfs_name?: string) {
     return serialize(
       null,
       undefined,
       () => {
         return this.base.open_v2(
-          filename || ":memory:",
+          filename,
           SQLite.SQLITE_OPEN_CREATE |
             SQLite.SQLITE_OPEN_READWRITE |
             SQLite.SQLITE_OPEN_URI,
-          filename != null ? "idb-batch-atomic" : undefined
+          // My understanding is that filename = ":memory:" case doesn't care about the vfs_name, whereas not specifying
+          // the vfs_name will use the default vfs (which is the desired VFS if set up using 'iniwWasm')
+          vfs_name
         );
       },
       topLevelMutex
@@ -47,14 +49,28 @@ export class SQLite3 {
   }
 }
 
-export default async function initWasm(
+export type VFSFactory = (module: SQLiteAPI) => Promise<SQLiteVFS>;
+export type ModuleFactory = (moduleArg?: Record<string, any>) => any;
+
+export type WasmInitializerConfig = {
+  ModuleFactory: ModuleFactory;
+  vfsFactory: VFSFactory;
+};
+
+export type WasmInitializer = (
+  locateWasm?: (file: string) => string
+) => Promise<SQLite3>;
+
+async function initWasmInternal(
+  ModuleFactory: ModuleFactory,
+  vfsFactory: VFSFactory,
   locateWasm?: (file: string) => string
 ): Promise<SQLite3> {
   if (api != null) {
     return api;
   }
 
-  const wasmModule = await SQLiteAsyncESMFactory({
+  const wasmModule = await ModuleFactory({
     locateFile(file: string) {
       if (locateWasm) {
         return locateWasm(file);
@@ -63,9 +79,37 @@ export default async function initWasm(
     },
   });
   const sqlite3 = SQLite.Factory(wasmModule);
-  const vfs = await IDBBatchAtomicVFS.create("idb-batch-atomic", wasmModule);
+  const vfs = await vfsFactory(wasmModule);
   sqlite3.vfs_register(vfs, true);
 
   api = new SQLite3(sqlite3);
   return api;
+}
+
+/**
+ * Default initializer (for backwards compatibility), uses:
+ * - asyncify WASM build
+ * - IDB Batch Atomic VFS
+ */
+export default async function initWasm(
+  locateWasm?: (file: string) => string
+): Promise<SQLite3> {
+  const ModuleFactory = SQLiteAsyncESMFactory;
+  const vfsFactory: VFSFactory = (module) =>
+    IDBBatchAtomicVFS.create("idb-batch-atomic", module);
+  return initWasmInternal(ModuleFactory, vfsFactory, locateWasm);
+}
+
+/**
+ * Creates a custom wasm initializer (same signature as default `initWasm`) allowing
+ * consumer to provide:
+ * - custom WASM glue factory
+ * - custom VFS implementation.
+ */
+export function createWasmInitializer({
+  ModuleFactory,
+  vfsFactory,
+}: WasmInitializerConfig): WasmInitializer {
+  return (locateWasm?: (file: string) => string) =>
+    initWasmInternal(ModuleFactory, vfsFactory, locateWasm);
 }

@@ -1,4 +1,4 @@
-import initWasm, { SQLite3 } from "@vlcn.io/crsqlite-wasm";
+import initWasm, { SQLite3, WasmInitializer } from "@vlcn.io/crsqlite-wasm";
 import tblrx from "@vlcn.io/rx-tbl";
 import { CtxAsync } from "../context.js";
 import { Mutex } from "async-mutex";
@@ -14,12 +14,12 @@ const dbMap = new Map<DBID, [string, CtxAsync]>();
 const hooks = new Map<DBID, () => CtxAsync | null>();
 
 let initPromise: Promise<SQLite3> | null = null;
-function init(wasmUri?: string) {
+function init(wasmUri?: string, initializer: WasmInitializer = initWasm) {
   if (initPromise) {
     return initPromise;
   }
 
-  initPromise = initWasm(wasmUri ? () => wasmUri : undefined);
+  initPromise = initializer(wasmUri ? () => wasmUri : undefined);
   return initPromise;
 }
 

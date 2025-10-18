@@ -6,7 +6,7 @@ import { serialize, topLevelMutex } from "./serialize.js";
 import { DB } from "./DB.js";
 export { DB } from "./DB.js";
 
-let api: SQLite3 | null = null;
+const apiCache = new Map<string, SQLite3>();
 type SQLiteAPI = ReturnType<typeof SQLite.Factory>;
 
 export class SQLite3 {
@@ -55,6 +55,7 @@ export type ModuleFactory = (moduleArg?: Record<string, any>) => any;
 export type WasmInitializerConfig = {
   ModuleFactory: ModuleFactory;
   vfsFactory: VFSFactory;
+  cacheKey?: string;
 };
 
 export type WasmInitializer = (
@@ -64,10 +65,11 @@ export type WasmInitializer = (
 async function initWasmInternal(
   ModuleFactory: ModuleFactory,
   vfsFactory: VFSFactory,
-  locateWasm?: (file: string) => string
+  locateWasm?: (file: string) => string,
+  cacheKey?: string
 ): Promise<SQLite3> {
-  if (api != null) {
-    return api;
+  if (cacheKey && apiCache.has(cacheKey)) {
+    return apiCache.get(cacheKey)!;
   }
 
   const wasmModule = await ModuleFactory({
@@ -82,7 +84,11 @@ async function initWasmInternal(
   const vfs = await vfsFactory(wasmModule);
   sqlite3.vfs_register(vfs, true);
 
-  api = new SQLite3(sqlite3);
+  const api = new SQLite3(sqlite3);
+  if (cacheKey) {
+    apiCache.set(cacheKey, api);
+  }
+
   return api;
 }
 
@@ -97,7 +103,7 @@ export default async function initWasm(
   const ModuleFactory = SQLiteAsyncESMFactory;
   const vfsFactory: VFSFactory = (module) =>
     IDBBatchAtomicVFS.create("idb-batch-atomic", module);
-  return initWasmInternal(ModuleFactory, vfsFactory, locateWasm);
+  return initWasmInternal(ModuleFactory, vfsFactory, locateWasm, "default");
 }
 
 /**
@@ -109,7 +115,8 @@ export default async function initWasm(
 export function createWasmInitializer({
   ModuleFactory,
   vfsFactory,
+  cacheKey,
 }: WasmInitializerConfig): WasmInitializer {
   return (locateWasm?: (file: string) => string) =>
-    initWasmInternal(ModuleFactory, vfsFactory, locateWasm);
+    initWasmInternal(ModuleFactory, vfsFactory, locateWasm, cacheKey);
 }

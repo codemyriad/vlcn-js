@@ -49,7 +49,10 @@ export class SQLite3 {
   }
 }
 
-export type VFSFactory = (module: SQLiteAPI) => Promise<SQLiteVFS>;
+/**
+ * @param module The WASM module (glue code) instance (not to be confused with SQLiteAPI - wrapping the module)
+ */
+export type VFSFactory = (module: any) => Promise<SQLiteVFS>;
 export type ModuleFactory = (moduleArg?: Record<string, any>) => any;
 
 export type WasmInitializerConfig = {

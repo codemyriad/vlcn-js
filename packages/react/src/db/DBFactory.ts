@@ -14,6 +14,7 @@ const dbMap = new Map<DBID, [string, CtxAsync]>();
 const hooks = new Map<DBID, () => CtxAsync | null>();
 
 let initPromise: Promise<SQLite3> | null = null;
+// TODO: the initializer logic isn't wired in (see call to init() below)
 function init(wasmUri?: string, initializer: WasmInitializer = initWasm) {
   if (initPromise) {
     return initPromise;

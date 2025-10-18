@@ -141,9 +141,10 @@ class WrappedDB implements DB {
  * @returns
  */
 export function createDbProvider(
-  wasmUri?: string
-): (dbname: string, initializer?: WasmInitializer) => PromiseLike<DB> {
-  return async (dbname: string, initializer = initWasm): Promise<DB> => {
+  wasmUri?: string,
+  initializer = initWasm
+): (dbname: string) => PromiseLike<DB> {
+  return async (dbname: string): Promise<DB> => {
     const sqlite = await initializer(wasmUri ? () => wasmUri : undefined);
     const db = await sqlite.open(dbname);
 

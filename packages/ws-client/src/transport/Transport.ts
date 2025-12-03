@@ -31,4 +31,8 @@ export interface Transport {
   onResetStream: ((msg: StartStreaming) => Promise<void>) | null;
 
   close(): void;
+
+  // Connection lifecycle callbacks
+  onConnOpen?: (() => void) | null;
+  onConnClose?: (() => void) | null;
 }

@@ -17,6 +17,10 @@ export default class WebSocketTransport implements Transport {
   #onReady: (() => void) | null = null;
   #keepAliveInterval: number | null = null;
 
+  // Connection event callbacks
+  onConnOpen: (() => void) | null = null;
+  onConnClose: (() => void) | null = null;
+
   constructor(options: TransporOptions) {
     this.#options = options;
   }
@@ -54,6 +58,16 @@ export default class WebSocketTransport implements Transport {
 
     socket.onopen = () => {
       if (this.#onReady) this.#onReady();
+      if (this.onConnOpen) this.onConnOpen();
+    };
+
+    socket.onclose = () => {
+      if (this.onConnClose) this.onConnClose();
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      if (this.onConnClose) this.onConnClose();
     };
 
     this.#socket = socket;

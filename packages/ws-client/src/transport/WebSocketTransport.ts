@@ -17,9 +17,8 @@ export default class WebSocketTransport implements Transport {
   #onReady: (() => void) | null = null;
   #keepAliveInterval: number | null = null;
 
-  // Connection event callbacks
-  onConnOpen: (() => void) | null = null;
-  onConnClose: (() => void) | null = null;
+  #closeTimeout: number | null = null;
+  #pingTimeout: number | null = null;
 
   constructor(options: TransporOptions) {
     this.#options = options;
@@ -36,11 +35,14 @@ export default class WebSocketTransport implements Transport {
     }
 
     if (this.#keepAliveInterval == null) {
-      this.#keepAliveInterval = setInterval(() => {
-        if (!this.#socket || this.#socket?.readyState === WebSocket.CLOSED) {
-          this.#openSocketAndKeepAlive(options);
-        }
-      }, Math.random() * 2000 + 1000);
+      this.#keepAliveInterval = setInterval(
+        () => {
+          if (!this.#socket || this.#socket?.readyState === WebSocket.CLOSED) {
+            this.#openSocketAndKeepAlive(options);
+          }
+        },
+        Math.random() * 2000 + 1000
+      );
     }
 
     const socket = new WebSocket(options.url, [
@@ -59,14 +61,14 @@ export default class WebSocketTransport implements Transport {
     socket.onopen = () => {
       if (this.#onReady) this.#onReady();
       if (this.onConnOpen) this.onConnOpen();
+      this.#resetSignOfLife();
     };
 
     socket.onclose = () => {
       if (this.onConnClose) this.onConnClose();
     };
 
-    socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+    socket.onerror = () => {
       if (this.onConnClose) this.onConnClose();
     };
 
@@ -74,13 +76,55 @@ export default class WebSocketTransport implements Transport {
     return socket;
   }
 
+  #resetSignOfLife() {
+    if (this.#closeTimeout) {
+      clearTimeout(this.#closeTimeout);
+    }
+    if (this.#pingTimeout) {
+      clearTimeout(this.#pingTimeout);
+    }
+
+    const { pingInterval = 1000, pingTimeout = 500 } = this.#options;
+
+    this.#pingTimeout = setTimeout(() => {
+      if (this.#socket && this.#socket.readyState === WebSocket.OPEN) {
+        this.#socket.send(encode({ _tag: tags.Ping }));
+      }
+    }, pingInterval);
+
+    this.#closeTimeout = setTimeout(() => {
+      console.warn(
+        "No sign of life from server, closing socket, the connection will retry until explicitly closed"
+      );
+      this.#closeSocket();
+    }, pingInterval + pingTimeout);
+  }
+
+  // Works as a soft-close when connection drops:
+  // - the socket gets closed and cleared
+  // - internal this.#closed is still false -- keep retrying the connection
+  // - run #openSocketAndKeepaAlive (reseting the keep alive interval if not set + retrying the connection)
+  #closeSocket() {
+    this.#socket?.close();
+    this.#socket = null;
+    this.#openSocketAndKeepAlive(this.#options);
+  }
+
   onChangesReceived: ((msg: Changes) => Promise<void>) | null = null;
   onStartStreaming: ((msg: StartStreaming) => Promise<void>) | null = null;
   onResetStream: ((msg: StartStreaming) => Promise<void>) | null = null;
   onReconnected: (() => Promise<void>) | null = null;
 
+  // Connection event callbacks
+  onConnOpen: (() => void) | null = null;
+  onConnClose: (() => void) | null = null;
+
   #processEvent = (data: Uint8Array) => {
     const msg = decode(data);
+
+    // Any message from server is a sign of life
+    this.#resetSignOfLife();
+
     switch (msg._tag) {
       case tags.AnnouncePresence:
       case tags.RejectChanges:
@@ -98,6 +142,10 @@ export default class WebSocketTransport implements Transport {
           this.#hadStartStream = true;
           this.onStartStreaming && this.onStartStreaming(msg);
         }
+        return;
+      case tags.Pong:
+        // Right now pong is just a sign of life - handled above
+        // TODO: we might implement additional data with the pong / heartbeat in the future
         return;
     }
   };

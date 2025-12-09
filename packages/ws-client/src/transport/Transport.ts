@@ -9,6 +9,8 @@ export type TransporOptions = {
   url: string;
   room: string;
   authToken?: string;
+  pingInterval?: number;
+  pingTimeout?: number;
 };
 
 export interface Transport {

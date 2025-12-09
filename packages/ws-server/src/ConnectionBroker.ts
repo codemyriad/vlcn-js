@@ -1,4 +1,4 @@
-import { Msg, decode, tags } from "@vlcn.io/ws-common";
+import { Msg, decode, encode, tags } from "@vlcn.io/ws-common";
 import SyncConnection, { createSyncConnection } from "./SyncConnection.js";
 import DBCache from "./DBCache.js";
 import { WebSocket } from "ws";
@@ -52,7 +52,12 @@ export default class ConnectionBroker {
 
   async #handleMessage(msg: Msg) {
     const tag = msg._tag;
+
     switch (tag) {
+      case tags.Ping: {
+        this.#ws.send(encode({ _tag: tags.Pong }));
+        return;
+      }
       // Note: room could go in the `AnnouncePresence` message instead of the random headers.
       case tags.AnnouncePresence: {
         logger.info(`AnnouncePresence for: ${this.#room}`);

@@ -9,6 +9,8 @@ export type TransporOptions = {
   url: string;
   room: string;
   authToken?: string;
+  pingInterval?: number;
+  pingTimeout?: number;
 };
 
 export interface Transport {
@@ -31,4 +33,8 @@ export interface Transport {
   onResetStream: ((msg: StartStreaming) => Promise<void>) | null;
 
   close(): void;
+
+  // Connection lifecycle callbacks
+  onConnOpen?: (() => void) | null;
+  onConnClose?: (() => void) | null;
 }

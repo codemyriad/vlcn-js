@@ -16,7 +16,7 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.0.2",
     "rollup": "^3.21.8",
-    "typescript": "^5.0.4"
+    "typescript": "~5.9.3"
   },
   "scripts": {
     "build": "tsc --build && pnpm run bundle-worker",

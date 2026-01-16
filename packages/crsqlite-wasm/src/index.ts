@@ -104,7 +104,7 @@ export default async function initWasm(
   locateWasm?: (file: string) => string
 ): Promise<SQLite3> {
   const ModuleFactory = SQLiteAsyncESMFactory;
-  const vfsFactory: VFSFactory = (module) =>
+  const vfsFactory: VFSFactory = async (module) =>
     IDBBatchAtomicVFS.create("idb-batch-atomic", module);
   return initWasmInternal(ModuleFactory, vfsFactory, locateWasm, "default");
 }

@@ -9,7 +9,8 @@ const ex = {
   },
 
   fileEventNameToDbId(filename: string): string {
-    return path.parse(filename).name.replace(/-[pos|shm|wal]+$/, "");
+    const base = path.basename(filename);
+    return base.replace(/\.touch$/, "").replace(/-(?:pos|shm|wal)$/, "");
   },
 
   needsTouchHack() {

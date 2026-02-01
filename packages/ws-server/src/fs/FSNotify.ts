@@ -67,9 +67,10 @@ export default class FSNotify {
   }
 
   addListener(dbid: string, cb: () => void) {
-    const listeners = this.listeners.get(dbid);
+    const key = util.fileEventNameToDbId(dbid);
+    const listeners = this.listeners.get(key);
     if (listeners == null) {
-      this.listeners.set(dbid, new Set([cb]));
+      this.listeners.set(key, new Set([cb]));
     } else {
       listeners.add(cb);
     }
@@ -85,11 +86,12 @@ export default class FSNotify {
   }
 
   removeListener(dbid: string, cb: () => void) {
-    const listeners = this.listeners.get(dbid);
+    const key = util.fileEventNameToDbId(dbid);
+    const listeners = this.listeners.get(key);
     if (listeners != null) {
       listeners.delete(cb);
       if (listeners.size === 0) {
-        this.listeners.delete(dbid);
+        this.listeners.delete(key);
       }
     }
   }

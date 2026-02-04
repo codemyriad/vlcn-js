@@ -10,6 +10,7 @@ export default class OutboundStream {
   #localOnly: boolean = false;
   #timeoutHandle: number | null = null;
   #bufferFullBackoff = 50;
+  #sentProbe = false;
   readonly #disposer;
 
   constructor(db: DB, transport: Transport) {
@@ -22,6 +23,7 @@ export default class OutboundStream {
     this.#lastSent = msg.since;
     this.#excludeSites = msg.excludeSites;
     this.#localOnly = msg.localOnly;
+    this.#sentProbe = false;
     // initial kickoff so we don't wait for a db change event
     this.#dbChanged();
   };
@@ -56,6 +58,15 @@ export default class OutboundStream {
     }
 
     if (changes.length == 0) {
+      if (!this.#sentProbe) {
+        this.#sentProbe = true;
+        this.#transport.sendChanges({
+          _tag: tags.Changes,
+          changes: [],
+          sender: this.#db.siteid,
+          since: lastSent,
+        });
+      }
       return;
     }
     const lastChange = changes[changes.length - 1];
@@ -74,6 +85,7 @@ export default class OutboundStream {
       switch (didSend) {
         case "sent":
           this.#bufferFullBackoff = 50;
+          this.#sentProbe = true;
           break;
         case "buffer-full":
           this.#lastSent = lastSent;

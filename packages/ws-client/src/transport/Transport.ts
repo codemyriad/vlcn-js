@@ -3,6 +3,7 @@ import {
   Changes,
   RejectChanges,
   StartStreaming,
+  SyncStatus,
 } from "@vlcn.io/ws-common";
 
 export type TransporOptions = {
@@ -31,6 +32,8 @@ export interface Transport {
   onStartStreaming: ((msg: StartStreaming) => Promise<void>) | null;
 
   onResetStream: ((msg: StartStreaming) => Promise<void>) | null;
+
+  onSyncStatus?: ((msg: SyncStatus) => void) | null;
 
   close(): void;
 

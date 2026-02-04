@@ -68,7 +68,15 @@ export default class SyncConnection {
     logger.info(`Sync connection closed`);
     this.#outboundStream.stop();
     // tell the cache we're done. It'll close the db on 0 references.
-    this.#dbCache.unref(this.#room);
+    try {
+      this.#dbCache.unref(this.#room);
+    } catch (err) {
+      logger.warn(
+        `Failed to unref db cache entry for ${this.#room}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
   }
 }
 

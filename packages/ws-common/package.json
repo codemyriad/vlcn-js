@@ -21,7 +21,8 @@
     "directory": "https://github.com/vlcn-io/js/tree/main/js/packages/ws-client"
   },
   "dependencies": {
-    "lib0": "^0.2.73"
+    "lib0": "^0.2.73",
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
     "fast-check": "^3.8.0",

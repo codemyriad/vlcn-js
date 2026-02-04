@@ -12,6 +12,7 @@ import {
   Pong,
   RejectChanges,
   StartStreaming,
+  SyncStatus,
   TagValues,
   tags,
   CreateDbOnPrimaryResponse,
@@ -103,6 +104,62 @@ export function decode(msg: Uint8Array): Msg {
         _reqid: decoding.readVarInt(decoder),
         err: decoding.readVarString(decoder),
       } satisfies Err;
+    case tags.SyncStatus: {
+      const ok = decoding.readUint8(decoder) === 1;
+
+      let siteId: Uint8Array | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        siteId = decoding.readVarUint8Array(decoder);
+      }
+
+      let schemaName: string | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        schemaName = decoding.readVarString(decoder);
+      }
+
+      let schemaVersion: bigint | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        schemaVersion = decoding.readBigInt64(decoder);
+      }
+
+      let schemaHash: string | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        schemaHash = decoding.readVarString(decoder);
+      }
+
+      let stage: SyncStatus["stage"];
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        stage = decoding.readVarString(decoder) as SyncStatus["stage"];
+      }
+
+      let ackDbVersion: bigint | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        ackDbVersion = decoding.readBigInt64(decoder);
+      }
+
+      let reason: string | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        reason = decoding.readVarString(decoder);
+      }
+
+      let message: string | undefined;
+      if (decoding.hasContent(decoder) && decoding.readUint8(decoder) === 1) {
+        message = decoding.readVarString(decoder);
+      }
+
+      return {
+        _tag: tags.SyncStatus,
+        ok,
+        siteId,
+        schemaName,
+        schemaVersion,
+        schemaHash,
+        stage,
+        ackDbVersion,
+        reason,
+        message,
+      } satisfies SyncStatus;
+    }
     default:
       tag as never;
   }

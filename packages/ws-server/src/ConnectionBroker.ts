@@ -1,4 +1,4 @@
-import { Msg, decode, encode, tags } from "@vlcn.io/ws-common";
+import { Msg, decode, encode, tags, type AnnouncePresence, type SyncStatus } from "@vlcn.io/ws-common";
 import SyncConnection, { createSyncConnection } from "./SyncConnection.js";
 import DBCache from "./DBCache.js";
 import { WebSocket } from "ws";
@@ -21,11 +21,14 @@ export default class ConnectionBroker {
   readonly #dbCache;
   readonly #ws;
   readonly #room;
+  readonly #transport;
+  #closed = false;
 
   constructor({ ws, dbCache, room }: Options) {
     this.#dbCache = dbCache;
     this.#ws = ws;
     this.#room = room;
+    this.#transport = new Transport(ws);
 
     this.#ws.on("message", async (data) => {
       // TODO: for litefs support we should just read the tag out
@@ -69,14 +72,37 @@ export default class ConnectionBroker {
           );
         }
 
-        const syncConnection = await createSyncConnection(
-          this.#dbCache,
-          new Transport(this.#ws),
-          this.#room,
-          msg
-        );
-        this.#syncConnection = syncConnection;
-        syncConnection.start();
+        const status = await this.#buildSyncStatus(msg);
+        this.#transport.sendSyncStatus(status);
+
+        if (!status.ok) {
+          logger.warn(`Closing connection for ${this.#room} due to incompatible sync status: ${status.reason || "unknown"}`);
+          this.#ws.close(1011, "sync_incompatible");
+          return;
+        }
+
+        try {
+          const syncConnection = await createSyncConnection(
+            this.#dbCache,
+            this.#transport,
+            this.#room,
+            msg
+          );
+          this.#syncConnection = syncConnection;
+          syncConnection.start();
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          logger.error(`Failed to create sync connection for ${this.#room}: ${reason}`);
+          this.#transport.sendSyncStatus({
+            _tag: tags.SyncStatus,
+            ok: false,
+            reason: "server_error",
+            message: reason,
+            stage: "handshake",
+          });
+          this.close();
+          this.#ws.close(1011, "sync_setup_failed");
+        }
         return;
       }
       case tags.Changes: {
@@ -105,6 +131,43 @@ export default class ConnectionBroker {
   }
 
   close() {
+    if (this.#closed) {
+      return;
+    }
+    this.#closed = true;
     this.#syncConnection?.close();
+  }
+
+  async #buildSyncStatus(msg: AnnouncePresence): Promise<SyncStatus> {
+    try {
+      return await this.#dbCache.use(this.#room, msg.schemaName, async (db) => {
+        const schemaMismatch =
+          db.schemaName !== msg.schemaName || db.schemaVersion !== msg.schemaVersion;
+        const lastSeen = db.getLastSeen(msg.sender);
+
+        return {
+          _tag: tags.SyncStatus,
+          ok: !schemaMismatch,
+          siteId: db.siteId,
+          schemaName: db.schemaName,
+          schemaVersion: db.schemaVersion,
+          schemaHash: db.schemaVersion.toString(),
+          ackDbVersion: lastSeen?.[0],
+          stage: "handshake",
+          reason: schemaMismatch ? "schema_mismatch" : undefined,
+          message: schemaMismatch
+            ? `Server schema ${db.schemaVersion.toString()} does not match client ${msg.schemaVersion.toString()}`
+            : undefined,
+        };
+      });
+    } catch (err) {
+      return {
+        _tag: tags.SyncStatus,
+        ok: false,
+        reason: "server_error",
+        message: err instanceof Error ? err.message : String(err),
+        stage: "handshake",
+      };
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { Changes, greaterThanOrEqual, tags } from "@vlcn.io/ws-common";
+import { Changes, greaterThanOrEqual, tags, type SyncStatus } from "@vlcn.io/ws-common";
 import DB, { IDB } from "../DB.js";
 import Transport from "../Trasnport.js";
 
@@ -14,6 +14,7 @@ export default class InboundStream {
   readonly #db;
   readonly #from;
   #lastSeen: readonly [bigint, number] | null = null;
+  #sentSteadyStatus = false;
 
   constructor(transport: Transport, db: IDB, from: Uint8Array) {
     this.#transport = transport;
@@ -33,6 +34,10 @@ export default class InboundStream {
       localOnly: false,
       since: this.#lastSeen,
     });
+
+    // Immediately acknowledge readiness so the client can exit "connecting" even if there
+    // are no inbound changes to apply yet.
+    this.#sendApplyStatus(true, this.#lastSeen);
   }
 
   async receiveChanges(msg: Changes) {
@@ -52,17 +57,66 @@ export default class InboundStream {
       });
     }
 
-    if (msg.changes.length == 0) {
+    try {
+      if (msg.changes.length > 0) {
+        const lastChange = msg.changes[msg.changes.length - 1];
+        const newLastSeen = [lastChange[5], 0] as const;
+        await this.#db.applyChangesetAndSetLastSeen(
+          msg.changes,
+          msg.sender,
+          newLastSeen
+        );
+
+        this.#lastSeen = newLastSeen;
+      }
+      this.#sendApplyStatus(true, this.#lastSeen);
+    } catch (err) {
+      this.#sendApplyStatus(false, null, err);
+      throw err;
+    }
+  }
+
+  #sendApplyStatus(
+    ok: boolean,
+    lastSeen: readonly [bigint, number] | null,
+    err?: unknown
+  ) {
+    if (ok && lastSeen == null) {
       return;
     }
-    const lastChange = msg.changes[msg.changes.length - 1];
-    const newLastSeen = [lastChange[5], 0] as const;
-    await this.#db.applyChangesetAndSetLastSeen(
-      msg.changes,
-      msg.sender,
-      newLastSeen
-    );
+    const stage = ok
+      ? this.#sentSteadyStatus
+        ? ("apply_ack" as SyncStatus["stage"])
+        : ("steady" as SyncStatus["stage"])
+      : ("steady" as SyncStatus["stage"]);
 
-    this.#lastSeen = newLastSeen;
+    if (ok && !this.#sentSteadyStatus) {
+      this.#sentSteadyStatus = true;
+    }
+
+    const status: SyncStatus = ok
+      ? {
+          _tag: tags.SyncStatus,
+          ok,
+          stage,
+          siteId: this.#db.siteId,
+          schemaName: this.#db.schemaName,
+          schemaVersion: this.#db.schemaVersion,
+          schemaHash: this.#db.schemaVersion.toString(),
+          ackDbVersion: lastSeen?.[0],
+        }
+      : {
+          _tag: tags.SyncStatus,
+          ok,
+          stage: this.#sentSteadyStatus ? "apply_ack" : "steady",
+          siteId: this.#db.siteId,
+          schemaName: this.#db.schemaName,
+          schemaVersion: this.#db.schemaVersion,
+          schemaHash: this.#db.schemaVersion.toString(),
+          reason: "apply_failed",
+          message: err instanceof Error ? err.message : String(err ?? "unknown"),
+        };
+
+    this.#transport.sendSyncStatus(status);
   }
 }

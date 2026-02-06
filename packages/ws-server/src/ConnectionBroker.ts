@@ -29,12 +29,11 @@ export function checkPeerCoherence(
     return { ok: true };
   }
 
-  const serverKnowsClient = db.getLastSeen(sender)[0] > 0n;
   const clientKnowsServer = lastSeens.some(
     ([siteId]) => uintArraysEqual(siteId, db.siteId)
   );
 
-  if (!serverKnowsClient && !clientKnowsServer) {
+  if (!clientKnowsServer) {
     return { ok: false, reason: "peer_mismatch" };
   }
 

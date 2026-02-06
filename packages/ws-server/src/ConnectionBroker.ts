@@ -1,6 +1,7 @@
-import { Msg, decode, encode, tags, type AnnouncePresence, type SyncStatus } from "@vlcn.io/ws-common";
+import { Msg, decode, encode, tags, uintArraysEqual, type AnnouncePresence, type SyncStatus } from "@vlcn.io/ws-common";
 import SyncConnection, { createSyncConnection } from "./SyncConnection.js";
 import DBCache from "./DBCache.js";
+import type { IDB } from "./DB.js";
 import { WebSocket } from "ws";
 import Transport from "./Trasnport.js";
 import { logger } from "@vlcn.io/logger-provider";
@@ -10,6 +11,35 @@ export type Options = {
   dbCache: DBCache;
   room: string;
 };
+
+/**
+ * Checks whether a connecting client is coherent with the server's peer history.
+ *
+ * Returns `{ ok: true }` when the client is compatible, or
+ * `{ ok: false, reason: "peer_mismatch" }` when the server was rebuilt
+ * and the client has stale sync history.
+ */
+export function checkPeerCoherence(
+  db: IDB,
+  sender: Uint8Array,
+  lastSeens: readonly [Uint8Array, [bigint, number]][]
+): { ok: true } | { ok: false; reason: "peer_mismatch" } {
+  const clientHasSyncHistory = lastSeens.length > 0;
+  if (!clientHasSyncHistory) {
+    return { ok: true };
+  }
+
+  const serverKnowsClient = db.getLastSeen(sender)[0] > 0n;
+  const clientKnowsServer = lastSeens.some(
+    ([siteId]) => uintArraysEqual(siteId, db.siteId)
+  );
+
+  if (!serverKnowsClient && !clientKnowsServer) {
+    return { ok: false, reason: "peer_mismatch" };
+  }
+
+  return { ok: true };
+}
 
 /**
  * A connection broker maps PartyKit connections to Database Sync connections
@@ -143,21 +173,47 @@ export default class ConnectionBroker {
       return await this.#dbCache.use(this.#room, msg.schemaName, async (db) => {
         const schemaMismatch =
           db.schemaName !== msg.schemaName || db.schemaVersion !== msg.schemaVersion;
+
+        if (schemaMismatch) {
+          return {
+            _tag: tags.SyncStatus,
+            ok: false,
+            siteId: db.siteId,
+            schemaName: db.schemaName,
+            schemaVersion: db.schemaVersion,
+            schemaHash: db.schemaVersion.toString(),
+            stage: "handshake",
+            reason: "schema_mismatch",
+            message: `Server schema ${db.schemaVersion.toString()} does not match client ${msg.schemaVersion.toString()}`,
+          };
+        }
+
+        const coherence = checkPeerCoherence(db, msg.sender, msg.lastSeens);
+        if (!coherence.ok) {
+          return {
+            _tag: tags.SyncStatus,
+            ok: false,
+            siteId: db.siteId,
+            schemaName: db.schemaName,
+            schemaVersion: db.schemaVersion,
+            schemaHash: db.schemaVersion.toString(),
+            stage: "handshake",
+            reason: "peer_mismatch",
+            message: "The server database was rebuilt. Your local data needs to be re-synced.",
+          };
+        }
+
         const lastSeen = db.getLastSeen(msg.sender);
 
         return {
           _tag: tags.SyncStatus,
-          ok: !schemaMismatch,
+          ok: true,
           siteId: db.siteId,
           schemaName: db.schemaName,
           schemaVersion: db.schemaVersion,
           schemaHash: db.schemaVersion.toString(),
           ackDbVersion: lastSeen?.[0],
           stage: "handshake",
-          reason: schemaMismatch ? "schema_mismatch" : undefined,
-          message: schemaMismatch
-            ? `Server schema ${db.schemaVersion.toString()} does not match client ${msg.schemaVersion.toString()}`
-            : undefined,
         };
       });
     } catch (err) {

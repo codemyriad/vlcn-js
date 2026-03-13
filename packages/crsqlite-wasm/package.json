@@ -28,6 +28,9 @@
     "url": "git@github.com:vlcn-io/js.git",
     "directory": "https://github.com/vlcn-io/js/tree/main/js/browser/crsqlite"
   },
+  "publishConfig": {
+    "registry": "https://npm.codemyriad.io/"
+  },
   "dependencies": {
     "@vlcn.io/wa-sqlite": "workspace:*",
     "@vlcn.io/xplat-api": "workspace:*",

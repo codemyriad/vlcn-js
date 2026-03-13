@@ -20,6 +20,9 @@
     "url": "git@github.com:vlcn-io/js.git",
     "directory": "https://github.com/vlcn-io/js/tree/main/js/packages/ws-server"
   },
+  "publishConfig": {
+    "registry": "https://npm.codemyriad.io/"
+  },
   "dependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@vlcn.io/crsqlite": "workspace:*",

@@ -24,6 +24,9 @@
     "url": "git@github.com:vlcn-io/js.git",
     "directory": "https://github.com/vlcn-io/js/tree/main/js/xplat-api"
   },
+  "publishConfig": {
+    "registry": "https://npm.codemyriad.io/"
+  },
   "dependencies": {
     "comlink": "^4.4.1"
   }

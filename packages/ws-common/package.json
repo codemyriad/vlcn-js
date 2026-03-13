@@ -20,6 +20,9 @@
     "url": "git@github.com:vlcn-io/js.git",
     "directory": "https://github.com/vlcn-io/js/tree/main/js/packages/ws-client"
   },
+  "publishConfig": {
+    "registry": "https://npm.codemyriad.io/"
+  },
   "dependencies": {
     "lib0": "^0.2.73"
   },

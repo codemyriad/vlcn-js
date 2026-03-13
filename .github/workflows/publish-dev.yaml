@@ -1,0 +1,61 @@
+name: Publish dev snapshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - librocco/main
+
+concurrency:
+  group: publish-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout vlcn-js
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          path: js
+
+      - name: Checkout typed-sql sibling
+        uses: actions/checkout@v4
+        with:
+          path: typed-sql
+          repository: vlcn-io/typed-sql
+
+      - name: Install wabt
+        run: sudo apt-get update && sudo apt-get install -y wabt
+
+      - name: Install Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-10-05
+          override: true
+
+      - name: Setup Node and pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: js/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Configure registry auth
+        run: |
+          echo "//npm.codemyriad.io/:_authToken=${{ secrets.VERDACCIO_TOKEN }}" >> ~/.npmrc
+
+      - name: Build
+        working-directory: js
+        run: make
+
+      - name: Publish dev snapshots
+        working-directory: js
+        run: ./scripts/publish/publish.sh dev

@@ -112,3 +112,19 @@ git clone --recurse-submodules git@github.com:vlcn-io/workspace.git
 
 Running `make` in that directory will get you set up. Ensure you have the rust nightly toolchain installed and activated before running make.
 
+## Fork publishing
+
+The codemyriad fork publishes forked `@vlcn.io/*` packages to `https://npm.codemyriad.io/`.
+
+Development snapshot publishes use the current repo commit SHA in the prerelease version, for example `0.2.2-dev.20260313.abcd1234`. Stable fork releases use an explicit `myriad.N` suffix, for example `0.2.2-myriad.1`.
+
+From a fork checkout with `typed-sql` available as a sibling repo and registry auth configured outside the repo:
+
+```bash
+make
+DRY_RUN=true ./scripts/publish/publish.sh dev
+./scripts/publish/publish.sh dev
+MYRIAD_N=1 ./scripts/publish/publish.sh myriad
+```
+
+The publish script refuses to reuse an existing `name@version`, which prevents the same version from being republished with different contents.

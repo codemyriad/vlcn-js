@@ -19,6 +19,9 @@
     "url": "git@github.com:vlcn-io/js.git",
     "directory": "https://github.com/vlcn-io/js/tree/main/js/packages/logger-provider"
   },
+  "publishConfig": {
+    "registry": "https://npm.codemyriad.io/"
+  },
   "dependencies": {
     "winston": "^3.10.0"
   },

@@ -57,6 +57,7 @@ export default class DB implements IDB {
   readonly #applyChangesAndSetLastSeenTx;
   readonly #dbname;
   readonly #dbpath;
+  #closed = false;
 
   /**
    * A trivial `notifyOfChange` implementation.
@@ -221,6 +222,9 @@ export default class DB implements IDB {
   }
 
   getLastSeen(site: Uint8Array): [bigint, number] {
+    if (this.#closed) {
+      return [0n, 0];
+    }
     const result = this.#getLastSeenStmt.raw(true).get(site) as
       | [bigint, bigint]
       | null;
@@ -236,6 +240,9 @@ export default class DB implements IDB {
     siteId: Uint8Array,
     newLastSeen: readonly [bigint, number]
   ): Promise<void> {
+    if (this.#closed) {
+      return Promise.resolve();
+    }
     this.#applyChangesAndSetLastSeenTx(changes, siteId, newLastSeen);
     if (this.#fsnotify == null) {
       this.#notifyOfChange();
@@ -249,6 +256,9 @@ export default class DB implements IDB {
     since: readonly [bigint, number],
     excludeSite: Uint8Array
   ): readonly Change[] {
+    if (this.#closed) {
+      return [];
+    }
     return this.#getChangesStmt.all(since[0], excludeSite) as Change[];
   }
 
@@ -272,6 +282,7 @@ export default class DB implements IDB {
   close() {
     this.#db.prepare(`SELECT crsql_finalize()`).run();
     this.#db.close();
+    this.#closed = true;
   }
 
   // No schema exists on the db. Straight apply it.

@@ -34,11 +34,15 @@ export default class DBCache {
     return ret[0];
   }
 
-  async use(roomId: string, schemaName: string, cb: (db: IDB) => unknown) {
+  async use<T>(
+    roomId: string,
+    schemaName: string,
+    cb: (db: IDB) => T | Promise<T>
+  ): Promise<T> {
     const version = getResidentSchemaVersion(schemaName, this.#config);
     const db = await this.getAndRef(roomId, schemaName, version);
     try {
-      await cb(db);
+      return await cb(db);
     } finally {
       this.unref(roomId);
     }

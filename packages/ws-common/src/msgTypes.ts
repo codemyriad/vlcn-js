@@ -3,6 +3,7 @@ export type Msg =
   | Changes
   | RejectChanges
   | StartStreaming
+  | SyncStatus
   | CreateDbOnPrimary
   | ApplyChangesOnPrimary
   | Ping
@@ -23,6 +24,7 @@ export const tags = {
   CreateDbOnPrimaryResponse: 9,
   Err: 10,
   ApplyChangesOnPrimaryResponse: 11,
+  SyncStatus: 12,
 } as const;
 
 export type Tags = typeof tags;
@@ -74,6 +76,21 @@ export type StartStreaming = Readonly<{
   since: readonly [bigint, number];
   excludeSites: readonly Uint8Array[];
   localOnly: boolean;
+}>;
+
+export type SyncStatusStage = "handshake" | "steady" | "apply_ack";
+
+export type SyncStatus = Readonly<{
+  _tag: Tags["SyncStatus"];
+  ok: boolean;
+  siteId?: Uint8Array;
+  schemaName?: string;
+  schemaVersion?: bigint;
+  schemaHash?: string;
+  stage?: SyncStatusStage;
+  ackDbVersion?: bigint;
+  reason?: string;
+  message?: string;
 }>;
 
 export type CreateDbOnPrimary = Readonly<{

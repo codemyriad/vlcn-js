@@ -7,6 +7,7 @@ import {
   decode,
   encode,
   tags,
+  type SyncStatus,
 } from "@vlcn.io/ws-common";
 
 export default class WebSocketTransport implements Transport {
@@ -118,6 +119,7 @@ export default class WebSocketTransport implements Transport {
   // Connection event callbacks
   onConnOpen: (() => void) | null = null;
   onConnClose: (() => void) | null = null;
+  onSyncStatus: ((msg: SyncStatus) => void) | null = null;
 
   #processEvent = (data: Uint8Array) => {
     const msg = decode(data);
@@ -142,6 +144,9 @@ export default class WebSocketTransport implements Transport {
           this.#hadStartStream = true;
           this.onStartStreaming && this.onStartStreaming(msg);
         }
+        return;
+      case tags.SyncStatus:
+        this.onSyncStatus && this.onSyncStatus(msg);
         return;
       case tags.Pong:
         // Right now pong is just a sign of life - handled above

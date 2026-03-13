@@ -1,6 +1,7 @@
-import { Msg, decode, encode, tags } from "@vlcn.io/ws-common";
+import { Msg, decode, encode, tags, uintArraysEqual, type AnnouncePresence, type SyncStatus } from "@vlcn.io/ws-common";
 import SyncConnection, { createSyncConnection } from "./SyncConnection.js";
 import DBCache from "./DBCache.js";
+import type { IDB } from "./DB.js";
 import { WebSocket } from "ws";
 import Transport from "./Trasnport.js";
 import { logger } from "@vlcn.io/logger-provider";
@@ -12,6 +13,34 @@ export type Options = {
 };
 
 /**
+ * Checks whether a connecting client is coherent with the server's peer history.
+ *
+ * Returns `{ ok: true }` when the client is compatible, or
+ * `{ ok: false, reason: "peer_mismatch" }` when the server was rebuilt
+ * and the client has stale sync history.
+ */
+export function checkPeerCoherence(
+  db: IDB,
+  sender: Uint8Array,
+  lastSeens: readonly [Uint8Array, [bigint, number]][]
+): { ok: true } | { ok: false; reason: "peer_mismatch" } {
+  const clientHasSyncHistory = lastSeens.length > 0;
+  if (!clientHasSyncHistory) {
+    return { ok: true };
+  }
+
+  const clientKnowsServer = lastSeens.some(
+    ([siteId]) => uintArraysEqual(siteId, db.siteId)
+  );
+
+  if (!clientKnowsServer) {
+    return { ok: false, reason: "peer_mismatch" };
+  }
+
+  return { ok: true };
+}
+
+/**
  * A connection broker maps PartyKit connections to Database Sync connections
  * and dispatches messages from the PartyKitConnection to the appropriate
  * SyncConnection methods.
@@ -21,11 +50,14 @@ export default class ConnectionBroker {
   readonly #dbCache;
   readonly #ws;
   readonly #room;
+  readonly #transport;
+  #closed = false;
 
   constructor({ ws, dbCache, room }: Options) {
     this.#dbCache = dbCache;
     this.#ws = ws;
     this.#room = room;
+    this.#transport = new Transport(ws);
 
     this.#ws.on("message", async (data) => {
       // TODO: for litefs support we should just read the tag out
@@ -69,14 +101,37 @@ export default class ConnectionBroker {
           );
         }
 
-        const syncConnection = await createSyncConnection(
-          this.#dbCache,
-          new Transport(this.#ws),
-          this.#room,
-          msg
-        );
-        this.#syncConnection = syncConnection;
-        syncConnection.start();
+        const status = await this.#buildSyncStatus(msg);
+        this.#transport.sendSyncStatus(status);
+
+        if (!status.ok) {
+          logger.warn(`Closing connection for ${this.#room} due to incompatible sync status: ${status.reason || "unknown"}`);
+          this.#ws.close(1011, "sync_incompatible");
+          return;
+        }
+
+        try {
+          const syncConnection = await createSyncConnection(
+            this.#dbCache,
+            this.#transport,
+            this.#room,
+            msg
+          );
+          this.#syncConnection = syncConnection;
+          syncConnection.start();
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          logger.error(`Failed to create sync connection for ${this.#room}: ${reason}`);
+          this.#transport.sendSyncStatus({
+            _tag: tags.SyncStatus,
+            ok: false,
+            reason: "server_error",
+            message: reason,
+            stage: "handshake",
+          });
+          this.close();
+          this.#ws.close(1011, "sync_setup_failed");
+        }
         return;
       }
       case tags.Changes: {
@@ -105,6 +160,69 @@ export default class ConnectionBroker {
   }
 
   close() {
+    if (this.#closed) {
+      return;
+    }
+    this.#closed = true;
     this.#syncConnection?.close();
+  }
+
+  async #buildSyncStatus(msg: AnnouncePresence): Promise<SyncStatus> {
+    try {
+      return await this.#dbCache.use(this.#room, msg.schemaName, async (db) => {
+        const schemaMismatch =
+          db.schemaName !== msg.schemaName || db.schemaVersion !== msg.schemaVersion;
+
+        if (schemaMismatch) {
+          return {
+            _tag: tags.SyncStatus,
+            ok: false,
+            siteId: db.siteId,
+            schemaName: db.schemaName,
+            schemaVersion: db.schemaVersion,
+            schemaHash: db.schemaVersion.toString(),
+            stage: "handshake",
+            reason: "schema_mismatch",
+            message: `Server schema ${db.schemaVersion.toString()} does not match client ${msg.schemaVersion.toString()}`,
+          };
+        }
+
+        const coherence = checkPeerCoherence(db, msg.sender, msg.lastSeens);
+        if (!coherence.ok) {
+          return {
+            _tag: tags.SyncStatus,
+            ok: false,
+            siteId: db.siteId,
+            schemaName: db.schemaName,
+            schemaVersion: db.schemaVersion,
+            schemaHash: db.schemaVersion.toString(),
+            stage: "handshake",
+            reason: "peer_mismatch",
+            message: "The server database was rebuilt. Your local data needs to be re-synced.",
+          };
+        }
+
+        const lastSeen = db.getLastSeen(msg.sender);
+
+        return {
+          _tag: tags.SyncStatus,
+          ok: true,
+          siteId: db.siteId,
+          schemaName: db.schemaName,
+          schemaVersion: db.schemaVersion,
+          schemaHash: db.schemaVersion.toString(),
+          ackDbVersion: lastSeen?.[0],
+          stage: "handshake",
+        };
+      });
+    } catch (err) {
+      return {
+        _tag: tags.SyncStatus,
+        ok: false,
+        reason: "server_error",
+        message: err instanceof Error ? err.message : String(err),
+        stage: "handshake",
+      };
+    }
   }
 }

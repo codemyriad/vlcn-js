@@ -59,6 +59,50 @@ export function encode(msg: Msg): Uint8Array {
       encoding.writeVarInt(encoder, msg._reqid);
       encoding.writeVarString(encoder, msg.err);
       return encoding.toUint8Array(encoder);
+    case tags.SyncStatus:
+      encoding.writeUint8(encoder, msg.ok ? 1 : 0);
+
+      encoding.writeUint8(encoder, msg.siteId ? 1 : 0);
+      if (msg.siteId) {
+        encoding.writeVarUint8Array(encoder, msg.siteId);
+      }
+
+      encoding.writeUint8(encoder, msg.schemaName ? 1 : 0);
+      if (msg.schemaName) {
+        encoding.writeVarString(encoder, msg.schemaName);
+      }
+
+      encoding.writeUint8(encoder, msg.schemaVersion != null ? 1 : 0);
+      if (msg.schemaVersion != null) {
+        encoding.writeBigInt64(encoder, msg.schemaVersion);
+      }
+
+      encoding.writeUint8(encoder, msg.schemaHash ? 1 : 0);
+      if (msg.schemaHash) {
+        encoding.writeVarString(encoder, msg.schemaHash);
+      }
+
+      encoding.writeUint8(encoder, msg.stage ? 1 : 0);
+      if (msg.stage) {
+        encoding.writeVarString(encoder, msg.stage);
+      }
+
+      encoding.writeUint8(encoder, msg.ackDbVersion != null ? 1 : 0);
+      if (msg.ackDbVersion != null) {
+        encoding.writeBigInt64(encoder, msg.ackDbVersion);
+      }
+
+      encoding.writeUint8(encoder, msg.reason ? 1 : 0);
+      if (msg.reason) {
+        encoding.writeVarString(encoder, msg.reason);
+      }
+
+      encoding.writeUint8(encoder, msg.message ? 1 : 0);
+      if (msg.message) {
+        encoding.writeVarString(encoder, msg.message);
+      }
+
+      return encoding.toUint8Array(encoder);
   }
 }
 

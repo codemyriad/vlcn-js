@@ -2,6 +2,7 @@ import {
   Changes,
   RejectChanges,
   StartStreaming,
+  SyncStatus,
   encode,
 } from "@vlcn.io/ws-common";
 import { WebSocket } from "ws";
@@ -32,6 +33,10 @@ export default class Transport {
   }
 
   startStreaming(msg: StartStreaming) {
+    this.#ws.send(encode(msg));
+  }
+
+  sendSyncStatus(msg: SyncStatus) {
     this.#ws.send(encode(msg));
   }
 }

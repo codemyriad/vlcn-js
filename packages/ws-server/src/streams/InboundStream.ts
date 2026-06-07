@@ -50,11 +50,19 @@ export default class InboundStream {
     }
 
     if (!greaterThanOrEqual(this.#lastSeen, msg.since)) {
+      // Gap detected: this changeset starts after the version we have actually applied. Ask the
+      // sender to rewind and re-send from our last-seen, and STOP — do NOT apply this
+      // non-contiguous batch. Applying it (and advancing #lastSeen / the durable tracked_peers
+      // cursor below) past the gap silently and permanently dropped the missing range: the server
+      // marked itself caught up, never re-requested it, and the peer's committed changes were lost
+      // on the server and every other peer. Mirrors the client InboundStream, which returns
+      // immediately after rejecting.
       this.#transport.rejectChanges({
         _tag: tags.RejectChanges,
         whose: msg.sender,
         since: this.#lastSeen,
       });
+      return;
     }
 
     try {
